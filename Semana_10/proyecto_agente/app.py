@@ -151,7 +151,8 @@ def mostrar_aprobacion(i, mensaje):
 # 4a. Mostrar la conversación hasta ahora
 for i, m in enumerate(st.session_state.mensajes):
     with st.chat_message(m["rol"]):
-        st.markdown(m["texto"])
+        # El "$" de "US$" se confunde con una fórmula LaTeX; solo ese lo escapamos (las fórmulas siguen funcionando)
+        st.markdown(m["texto"].replace("US$", "US\\$"))
         if m["rol"] == "assistant":
             mostrar_pasos(m.get("pasos"))
             if necesita_aprobacion(m.get("pasos")):
