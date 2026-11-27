@@ -20,6 +20,15 @@ except ImportError:                            # VS Code: llave en el archivo .e
     from dotenv import load_dotenv
     load_dotenv()
     API_KEY = os.getenv("GEMINI_API_KEY")
+    if not API_KEY:                                # Streamlit Cloud: llave en Settings → Secrets
+        try:
+            import streamlit as st
+            API_KEY = st.secrets["GEMINI_API_KEY"]
+        except Exception:
+            API_KEY = None
+if not API_KEY:
+    raise RuntimeError("No encontré GEMINI_API_KEY. Ponla en el archivo .env (VS Code), en Secrets (Colab) "
+                       "o en Settings → Secrets (Streamlit Cloud).")
 client = genai.Client(api_key=API_KEY)
 
 # Elegir un modelo "flash-lite" disponible en su cuenta
@@ -268,10 +277,16 @@ def proponer_precio(precio_actual: float, costo: float, elasticidad: float, unid
     def utilidad(precio):
         return (precio - C) * Q * (precio / p) ** e
 
-    return {"precio_optimo": round(p_optimo, 2) if p_optimo else "no hay óptimo: con ε entre -1 y 0 conviene subir hasta el tope",
+    salida = {"precio_optimo": round(p_optimo, 2) if p_optimo else "no hay óptimo: con ε entre -1 y 0 conviene subir hasta el tope",
             "precio_propuesto": round(propuesto, 2), "cambio_pct": round(cambio * 100, 1),
             "utilidad_mensual_hoy": round(utilidad(p)), "utilidad_mensual_propuesta": round(utilidad(propuesto)),
             "requiere_aprobacion_humana": bool(abs(cambio) > 0.05)}
+    # Baranda: el mínimo de margen (1.2 × C) puede obligar a romper el tope de ±10%. Hay que decirlo.
+    if abs(cambio) > 0.10 + 1e-9:
+        salida["conflicto_reglas"] = (f"LAS REGLAS CHOCAN: el precio mínimo 1.2 × costo (US${1.2 * C:.2f}) obliga a un cambio de "
+                                      f"{cambio * 100:+.1f}%, que ROMPE el tope de ±10% por ciclo. No se cumplen todas las reglas: "
+                                      "una persona debe decidir cuál manda.")
+    return salida
 
 def metricas_regla_asociacion(producto_a: str, producto_b: str, fuente: str = "tickets") -> dict:
     """Soporte, confianza y lift de la regla A → B (Apriori, venta cruzada), calculados con los
